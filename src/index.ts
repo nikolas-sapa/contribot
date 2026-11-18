@@ -5,6 +5,8 @@ export { Ledger } from "./ledger/db.js";
 export { runChecks, DISCLOSURE_LINE } from "./checks/index.js";
 export { generateBrief, renderBrief } from "./brief/index.js";
 export { pickTask, evaluateIssueList, scoreIssue, isDependencyBump, maintainerRequestedHelp } from "./tasks/index.js";
+export { discoverRepos, scoreCandidate } from "./tasks/discover.js";
+export type { RepoCandidate } from "./tasks/discover.js";
 export type { RepoRef } from "./types.js";
 export type { Limits } from "./config.js";
 export type { Brief } from "./brief/index.js";

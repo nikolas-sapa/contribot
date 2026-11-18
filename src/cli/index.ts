@@ -121,6 +121,45 @@ program
   });
 
 program
+  .command("discover")
+  .description("search GitHub for repos where a contribution is most likely to land — ranks by project value × merge odds")
+  .option("--lang <language>", "filter by language")
+  .option("--min-stars <n>", "minimum stars", (v: string) => parseInt(v, 10))
+  .option("--limit <n>", "repos to evaluate", (v: string) => parseInt(v, 10))
+  .option("--query <q>", "extra GitHub search qualifiers")
+  .option("--no-ai-check", "skip AI-policy fetch (faster)")
+  .action(async (opts) => {
+    const agent = createAgent();
+    try {
+      const { discoverRepos } = await import("../tasks/discover.js");
+      const repos = await discoverRepos({
+        language: opts.lang,
+        minStars: opts.minStars,
+        limit: opts.limit,
+        extraQuery: opts.query,
+        checkAi: opts.aiCheck !== false,
+      });
+      if (!repos.length) {
+        console.log("no candidate repos matched — loosen --min-stars or --query");
+        process.exit(2);
+      }
+      console.log(`ranked contribution targets (score = project value × merge odds):\n`);
+      for (const c of repos) {
+        const tag = c.aiPolicy === "banned" ? " ⛔ AI-BANNED" : "";
+        console.log(`${String(c.score).padStart(6)}  ${c.ref.full}${tag}`);
+        console.log(`        ${c.reasons.join(" · ")}`);
+      }
+      agent.ledger.record("scout", null, null, { discover: true, count: repos.length });
+      const best = repos[0];
+      if (best && best.aiPolicy !== "banned") {
+        console.log(`\nnext: contribot scout ${best.ref.full} && contribot plan ${best.ref.full}`);
+      }
+    } finally {
+      agent.close();
+    }
+  });
+
+program
   .command("ledger")
   .option("--repo <full>", "filter to one repo")
   .action((opts: { repo?: string }) => {
