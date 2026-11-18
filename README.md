@@ -1,0 +1,110 @@
+# contribot
+
+An agent that onboards onto any OSS repo, understands it, and makes meaningful
+contributions — **with hard etiquette limits so it can never act like a bot.**
+
+GitHub is drowning in AI slop PRs. Maintainers auto-close them, and some
+projects ban AI contributions outright. contribot's differentiator: **the
+guardrails ARE the product.** Contribution etiquette is enforced in code, not
+prompted. Positioning is respectful contribution, never "AI PRs at scale."
+
+## Install
+
+```bash
+npm install          # then
+npm run build
+npm link             # puts `contribot` on PATH
+```
+
+Node 20+. Auth: `GITHUB_TOKEN`/`GH_TOKEN` env, or `gh auth login` (contribot
+reuses `gh auth token`). Read-only commands work unauthenticated at lower rate
+limits.
+
+## Commands
+
+```
+contribot scout <repo>            # read-only: full AGENT-BRIEF.md to stdout (or --out file)
+contribot plan <repo> --issue 42  # pick a contribution, produce a plan (no writes to GitHub)
+contribot pr <repo> --issue 42    # brief → checks → fork → branch → patch → repo CI → draft PR
+contribot ledger                  # all activity: PRs opened/merged/rejected, per-repo
+contribot limits                  # show current etiquette limits + config
+```
+
+## What `scout` produces
+
+`AGENT-BRIEF.md`: project map (languages, layout, entry points, test setup, CI
+checks parsed from `.github/workflows`), contribution rules extracted from
+CONTRIBUTING.md/CODE_OF_CONDUCT/PR & issue templates/DCO-CLA requirements into
+a machine-checkable checklist, maintainer signals (PR merge rate, median
+time-to-first-review, `good first issue`/`help wanted` counts), AI-policy
+detection (welcomed/banned/unmentioned — banned is a hard stop), and repo
+conventions (commit style, sign-off, lint config).
+
+## The etiquette engine
+
+Hard-coded limits, configurable **down** (stricter) only via
+`~/.contribot/config.json`:
+
+| Check | Default | Behavior |
+|---|---|---|
+| max open PRs per repo | 1 | refuse if you already have an open PR there |
+| max PRs per day, global | 2 | refuse above |
+| per-repo cooldown after closed/rejected PR | 14d | refuse |
+| AI-banned detection | block | CONTRIBUTING bans AI → hard stop, no override |
+| linked issue | block | PRs must reference an open issue (or `--trivial`) |
+| diff size cap | 400 lines | larger → requires `--allow-large` |
+| issue legitimacy | warn | only `good first`/`help wanted`/`bug`/`docs`/`tests` labels, or >30d old |
+| maintainer-requested | boost | maintainer help-wanted comments rank first |
+| CI parity | block | repo's own lint/test must pass locally before PR |
+| disclosure | enforce | PR body carries a non-removable AI-assistance line |
+| fork safety | enforce | never push upstream, never force-push, never touch others' branches |
+
+Every refusal prints the rule and reason. Per-check override flags
+(`--force-open-prs`, `--force-cooldown`, …) exist for humans, but **every
+override is logged loudly to the ledger** — the accountability trail is a
+feature.
+
+## Meaningful improvements only
+
+`plan`/`pr` must justify the change. Accepted: issues labeled
+good-first/help-wanted/bug/docs/tests, issues with a maintainer comment
+requesting a fix, or a detected defect with evidence (e.g. a dead doc link).
+Rejected outright: cosmetic refactors, "improvements" with no issue/defect,
+dependency bumps a bot already owns (dependabot/renovate detected → skipped),
+reformatting, comment churn, README badges.
+
+`pr` does not invent diffs. You (or your outer agent) supply `--patch
+<diff-file>`; contribot does everything around it: preflight checks → fork →
+branch (`contribot/issue-N-slug`) → apply patch → size re-check → commit
+(sign-off honored, conventional-commit style detected) → run the repo's own
+lint/test → push to **your fork only** → open a **draft** PR with an honest
+body (problem / change / verification / AI disclosure).
+
+## Ledger
+
+Every action lands in `~/.contribot/ledger.db`: scouts, plans, PRs opened,
+outcomes, cooldowns, refusals, overrides. `contribot ledger` shows history and
+per-repo reputation ("2 merged, 1 rejected"). Rejection rate >50% → the tool
+warns you that you're generating slop.
+
+## Library
+
+```ts
+import { createAgent } from "contribot";
+const agent = createAgent();
+const { markdown } = await agent.scout("expressjs/express");
+const plan = await agent.plan("vercel/ms", { issue: 123 });
+const res = await agent.pr("owner/repo", { issue: 123, patch: "fix.patch" });
+```
+
+## Non-goals (v1)
+
+No auto-commenting, no issue triage on others' repos, no mass operations. No
+LLM requirement (the checks layer is deterministic; an optional LLM hook for
+prose briefs is future work). No GitLab/Bitbucket, no private repos. No MCP
+server yet (`src/mcp/README.md`).
+
+## Tests
+
+`npx vitest run` — covers the brief extractor, every etiquette rule, the
+dependabot rejection, ledger accounting, and the no-suitable-task exit.

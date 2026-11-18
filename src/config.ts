@@ -1,0 +1,61 @@
+import { existsSync, mkdirSync, readFileSync } from "node:fs";
+import { homedir } from "node:os";
+import { join } from "node:path";
+
+export type Limits = {
+  maxOpenPrsPerRepo: number;
+  maxPrsPerDay: number;
+  cooldownDays: number;
+  diffSizeCap: number;
+  requireLinkedIssue: boolean;
+  ciParity: boolean;
+  disclosure: boolean;
+  issueLegitimacy: "warn" | "block";
+  issueAgeDays: number;
+};
+
+export const DEFAULT_LIMITS: Limits = {
+  maxOpenPrsPerRepo: 1,
+  maxPrsPerDay: 2,
+  cooldownDays: 14,
+  diffSizeCap: 400,
+  requireLinkedIssue: true,
+  ciParity: true,
+  disclosure: true,
+  issueLegitimacy: "warn",
+  issueAgeDays: 30,
+};
+
+export type LoadedConfig = {
+  dir: string;
+  limits: Limits;
+  overridden: string[];
+};
+
+export function contribotDir(base?: string): string {
+  const dir = base ?? join(homedir(), ".contribot");
+  mkdirSync(dir, { recursive: true });
+  return dir;
+}
+
+export function loadConfig(base?: string): LoadedConfig {
+  const dir = contribotDir(base);
+  const path = join(dir, "config.json");
+  const limits = { ...DEFAULT_LIMITS };
+  const overridden: string[] = [];
+  if (existsSync(path)) {
+    const raw = JSON.parse(readFileSync(path, "utf8")) as Partial<Limits>;
+    for (const k of ["maxOpenPrsPerRepo", "maxPrsPerDay", "cooldownDays", "diffSizeCap", "issueAgeDays"] as const) {
+      const v = raw[k];
+      if (typeof v === "number" && Number.isFinite(v) && v < limits[k]) {
+        limits[k] = v;
+        overridden.push(k);
+      }
+    }
+    if (raw.issueLegitimacy === "block") {
+      limits.issueLegitimacy = "block";
+      overridden.push("issueLegitimacy");
+    }
+  }
+  return { dir, limits, overridden };
+}
