@@ -77,10 +77,18 @@ Hard-coded limits, configurable **down** (stricter) only via
 simultaneous open PRs is the bot signature that gets accounts reported and gets
 repos to adopt blanket AI bans. One open PR per repo means you only ever ask a
 maintainer to review your *best* shot; two a day globally keeps a bad streak
-from becoming a reputation stain. The limits can't be loosened from config —
-that's the trust contract, not an inconvenience. Per-check `--force-*` flags
+from becoming a reputation stain. The defaults can't be raised without opting
+into unsafe mode — that's the trust contract, not an inconvenience. Per-check `--force-*` flags
 exist for exceptional humans, and every override is logged loudly to the
 ledger: the accountability trail is a feature.
+
+**Modifying limits at your own risk.** `~/.contribot/config.json` accepts
+`"allowUnsafeLimits": true`, which unlocks raising the *numeric* caps
+(`maxOpenPrsPerRepo`, `maxPrsPerDay`, `cooldownDays`, `diffSizeCap`,
+`issueAgeDays`). Three things can never be loosened because they're ethics, not
+limits: AI-ban hard stop, the disclosure line, fork safety. Every relaxed limit
+is printed as `[limit relaxed — unsafe mode]` in check output and logged to the
+ledger on every `pr` run — your reputation, your call, on the record.
 
 ## What `scout` produces
 

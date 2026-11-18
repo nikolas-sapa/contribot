@@ -198,8 +198,11 @@ program
   .action(() => {
     const agent = createAgent();
     try {
-      const { limits, overridden, dir } = agent.cfg;
-      console.log(`config: ${dir}/config.json ${overridden.length ? `(stricter overrides: ${overridden.join(", ")})` : "(defaults — config can only make limits stricter)"}`);
+      const { limits, overridden, relaxed, dir } = agent.cfg;
+      console.log(`config: ${dir}/config.json`);
+      if (overridden.length) console.log(`  stricter overrides: ${overridden.join(", ")}`);
+      if (relaxed.length) console.log(`  ⚠ UNSAFE MODE — relaxed above defaults (your own risk, logged per run): ${relaxed.join(", ")}`);
+      if (!overridden.length && !relaxed.length) console.log("  defaults — numeric caps loosenable only with allowUnsafeLimits:true");
       console.log("");
       const rows: [string, string][] = [
         ["max open PRs per repo", String(limits.maxOpenPrsPerRepo)],

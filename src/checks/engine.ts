@@ -155,6 +155,14 @@ export type EngineResult = {
   results: CheckResult[];
 };
 
+const RULE_TO_LIMIT_KEY: Record<string, string> = {
+  "max-open-prs-per-repo": "maxOpenPrsPerRepo",
+  "max-prs-per-day": "maxPrsPerDay",
+  "repo-cooldown": "cooldownDays",
+  "diff-size-cap": "diffSizeCap",
+  "issue-legitimacy": "issueAgeDays",
+};
+
 const OVERRIDE_TO_RULE: Record<string, string> = {
   "--force-open-prs": "max-open-prs-per-repo",
   "--force-daily-cap": "max-prs-per-day",
@@ -167,6 +175,12 @@ const OVERRIDE_TO_RULE: Record<string, string> = {
 export function runChecks(ctx: CheckContext, forceFlags: string[] = []): EngineResult & { overrides: string[] } {
   const results = RULES.map((r) => r(ctx));
   const overrides: string[] = [];
+  for (const res of results) {
+    const key = RULE_TO_LIMIT_KEY[res.rule];
+    if (key && ctx.relaxedLimits?.includes(key)) {
+      res.reason += " [limit relaxed above default — unsafe mode, logged]";
+    }
+  }
   for (const res of results) {
     if (res.status !== "block" || !res.overrideFlag) continue;
     const flag = res.overrideFlag;

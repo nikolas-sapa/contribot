@@ -92,3 +92,21 @@ describe("other checks", () => {
     expect(res.results.find((r) => r.rule === "fork-safety")!.status).toBe("block");
   });
 });
+
+describe("unsafe limits", () => {
+  it("relaxed daily cap passes but stays loudly marked", () => {
+    const { ledger } = tmpLedger();
+    ledger.record("pr_opened", "a/x", "#1", {});
+    ledger.record("pr_opened", "b/y", "#2", {});
+    ledger.record("pr_opened", "c/z", "#3", {});
+    const c = ctx(
+      { task: issueTask(makeIssue(4, { labels: ["bug"] })), relaxedLimits: ["maxPrsPerDay"] },
+      ledger,
+    );
+    c.limits.maxPrsPerDay = 10;
+    const res = runChecks(c);
+    const rule = res.results.find((r) => r.rule === "max-prs-per-day")!;
+    expect(rule.status).toBe("pass");
+    expect(rule.reason).toContain("relaxed above default");
+  });
+});

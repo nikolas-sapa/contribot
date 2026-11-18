@@ -35,6 +35,7 @@ export type CheckContext = {
   prBody: string | null;
   remoteIsUpstream: boolean;
   allowLarge: boolean;
+  relaxedLimits?: string[];
 };
 
 export const DISCLOSURE_LINE =

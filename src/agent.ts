@@ -74,6 +74,9 @@ export function createAgent(opts: { baseDir?: string } = {}): AgentDeps & {
     const ctx = baseCtx(ref, ledger, cfg, task, aiPolicy, openPrs);
     ctx.allowLarge = o.allowLarge ?? false;
     const check = runChecks(ctx, o.force ?? []);
+    if (cfg.relaxed.length) {
+      ledger.record("override", ref.full, null, { rule: "unsafe-limits", relaxed: cfg.relaxed, phase: "pr-preflight" });
+    }
     for (const rule of check.overrides) {
       ledger.record("override", ref.full, null, { rule, phase: "pr-preflight" });
     }
@@ -177,6 +180,7 @@ function baseCtx(
     prBody: null,
     remoteIsUpstream: false,
     allowLarge: false,
+    relaxedLimits: cfg.relaxed,
   };
 }
 
