@@ -20,5 +20,15 @@ export async function ensureFork(ref: RepoRef): Promise<ForkResult> {
     clone_url: string;
     full_name: string;
   };
+  const deadline = Date.now() + 120_000;
+  for (;;) {
+    try {
+      await ghJson(`/repos/${fork.full_name}`);
+      break;
+    } catch {
+      if (Date.now() > deadline) throw new Error("fork created but not yet available after 120s");
+      await new Promise((r) => setTimeout(r, 3000));
+    }
+  }
   return { owner: login, repo: ref.repo, cloneUrl: fork.clone_url, full: fork.full_name };
 }

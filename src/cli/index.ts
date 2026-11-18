@@ -13,7 +13,7 @@ program
 function printChecks(results: CheckResult[]): void {
   for (const r of results) {
     const icon = r.status === "block" ? "✗" : r.status === "warn" ? "!" : "✓";
-    const flag = r.overridden ? ` [overridden]` : r.status === "block" && r.overrideFlag ? ` (override: ${r.overrideFlag})` : "";
+    const flag = r.overridden ? ` [overridden]` : r.status === "block" && r.overrideFlag ? ` (override: --force ${r.rule} or --force=${r.overrideFlag})` : "";
     console.log(`  ${icon} ${r.rule}: ${r.reason}${flag}`);
   }
 }
@@ -44,7 +44,8 @@ program
       const res = await agent.plan(repo, { issue: opts.issue });
       if (!res.pick.task) {
         console.log(`no suitable task on ${res.ref.full}: ${res.pick.reason}`);
-        process.exit(2);
+        process.exitCode = 2;
+        return;
       }
       const t = res.pick.task;
       console.log(`# Contribution plan — ${res.ref.full}`);
@@ -58,7 +59,7 @@ program
       printChecks(res.check.results);
       if (res.check.status === "block") {
         console.log(`\nblocked — resolve the above before \`contribot pr\``);
-        process.exit(1);
+        process.exitCode = 1;
       }
     } finally {
       agent.close();
@@ -75,7 +76,7 @@ program
   .option("--branch-slug <slug>", "branch name suffix")
   .option("--trivial", "typo-class change, no linked issue required")
   .option("--allow-large", "permit diffs over the size cap (logged)")
-  .option("--force <flags...>", "override flags for blockable checks (each is logged to the ledger)")
+  .option("--force <flags...>", "override blockable checks: use rule names (repo-cooldown, linked-issue) or --force=--force-cooldown syntax — every override is logged")
   .action(async (repo: string, opts) => {
     const agent = createAgent();
     try {
@@ -92,13 +93,13 @@ program
       switch (res.stage) {
         case "no-task":
           console.log(`no suitable task on ${res.ref.full}: ${res.reason}`);
-          process.exit(2);
+          process.exitCode = 2;
           break;
         case "blocked":
           console.log(`blocked by etiquette rules:`);
           if (res.check) printChecks(res.check.results);
           if (res.reason) console.log(`  ✗ ${res.reason}`);
-          process.exit(1);
+          process.exitCode = 1;
           break;
         case "need-patch":
           console.log(`preflight passed:`);
@@ -108,7 +109,11 @@ program
         case "ci-failed":
           console.log(`repo checks failed — PR not opened:`);
           for (const c of res.ci?.commands ?? []) console.log(`  ${c.ok ? "✓" : "✗"} ${c.cmd}\n${c.tail}`);
-          process.exit(1);
+          process.exitCode = 1;
+          break;
+        case "error":
+          console.log(`error: ${res.reason}`);
+          process.exitCode = 1;
           break;
         case "opened":
           console.log(`draft PR opened: ${res.prUrl}`);

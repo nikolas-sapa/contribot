@@ -17,7 +17,7 @@ export class GitHubError extends Error {
 
 export async function ghToken(): Promise<string | null> {
   if (cachedToken !== undefined) return cachedToken;
-  cachedToken = process.env.GITHUB_TOKEN ?? process.env.GH_TOKEN ?? null;
+  cachedToken = process.env.GITHUB_TOKEN || process.env.GH_TOKEN || null;
   if (!cachedToken) {
     try {
       const { stdout } = await execFileP("gh", ["auth", "token"]);
@@ -29,14 +29,17 @@ export async function ghToken(): Promise<string | null> {
   return cachedToken;
 }
 
+let cachedUser: string | null | undefined;
+
 export async function ghUser(): Promise<string | null> {
+  if (cachedUser !== undefined) return cachedUser;
   const token = await ghToken();
-  if (!token) return null;
+  if (!token) return (cachedUser = null);
   try {
     const me = (await ghJson("/user")) as { login: string };
-    return me.login;
+    return (cachedUser = me.login);
   } catch {
-    return null;
+    return (cachedUser = null);
   }
 }
 
@@ -49,11 +52,16 @@ export async function ghJson(path: string, init: RequestInit = {}): Promise<unkn
   };
   if (token) headers.Authorization = `Bearer ${token}`;
   const url = path.startsWith("http") ? path : `${API}${path}`;
-  const res = await fetch(url, { ...init, headers });
+  const res = await fetch(url, { ...init, headers, signal: AbortSignal.timeout(20_000) });
   if (res.status === 204) return null;
   const body = await res.text();
   if (!res.ok) throw new GitHubError(res.status, body.slice(0, 300));
-  return body ? JSON.parse(body) : null;
+  if (!body) return null;
+  try {
+    return JSON.parse(body);
+  } catch {
+    throw new GitHubError(res.status, "non-JSON response body");
+  }
 }
 
 export async function ghSearchCount(q: string): Promise<number> {
@@ -69,6 +77,7 @@ export type GhIssue = {
   body: string | null;
   html_url: string;
   created_at: string;
+  state?: string;
   pull_request?: unknown;
   labels: { name: string }[];
   user: { login: string } | null;
@@ -94,11 +103,18 @@ export type GhPr = {
   draft: boolean;
 };
 
-export async function listOpenIssues(ref: { owner: string; repo: string }, perPage = 60): Promise<GhIssue[]> {
-  const issues = (await ghJson(
-    `/repos/${ref.owner}/${ref.repo}/issues?state=open&per_page=${perPage}&sort=created&direction=asc`,
-  )) as GhIssue[];
-  return issues.filter((i) => !i.pull_request);
+export async function listOpenIssues(ref: { owner: string; repo: string }, perPage = 100): Promise<GhIssue[]> {
+  try {
+    const res = (await ghJson(
+      `/search/issues?q=${encodeURIComponent(`repo:${ref.owner}/${ref.repo} is:issue is:open`)}&sort=updated&order=desc&per_page=${perPage}`,
+    )) as { items: GhIssue[] };
+    return res.items.filter((i) => !i.pull_request);
+  } catch {
+    const issues = (await ghJson(
+      `/repos/${ref.owner}/${ref.repo}/issues?state=open&per_page=${perPage}&sort=updated&direction=desc`,
+    )) as GhIssue[];
+    return issues.filter((i) => !i.pull_request);
+  }
 }
 
 export async function getIssue(ref: { owner: string; repo: string }, n: number): Promise<GhIssue> {
@@ -128,9 +144,17 @@ export async function getFileText(
   try {
     const res = (await ghJson(
       `/repos/${ref.owner}/${ref.repo}/contents/${encodeURIComponent(path).replaceAll("%2F", "/")}`,
-    )) as { content?: string; encoding?: string };
+    )) as { content?: string; encoding?: string; download_url?: string | null };
     if (res.encoding === "base64" && res.content) {
       return Buffer.from(res.content.replace(/\n/g, ""), "base64").toString("utf8");
+    }
+    if (res.download_url) {
+      const token = await ghToken();
+      const r = await fetch(res.download_url, {
+        headers: token ? { Authorization: `Bearer ${token}` } : {},
+        signal: AbortSignal.timeout(20_000),
+      });
+      if (r.ok) return r.text();
     }
     return null;
   } catch (e) {

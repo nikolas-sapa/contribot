@@ -104,7 +104,7 @@ export async function discoverRepos(opts: {
     .join(" ");
 
   const res = (await ghJson(
-    `/search/repositories?q=${encodeURIComponent(q)}&sort=stars&order=desc&per_page=${Math.min(limit + 6, 30)}`,
+    `/search/repositories?q=${encodeURIComponent(q)}&sort=stars&order=desc&per_page=${Math.min(limit * 2 + 4, 50)}`,
   )) as { items: SearchRepo[] };
 
   const out: RepoCandidate[] = [];

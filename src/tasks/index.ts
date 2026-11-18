@@ -18,8 +18,20 @@ export async function pickTask(
   const depBot = await depBotPresentApi(ref).catch(() => false);
 
   if (opts.issue !== undefined) {
-    const { getIssue } = await import("../github.js");
-    const issue = await getIssue(ref, opts.issue);
+    const { getIssue, GitHubError } = await import("../github.js");
+    let issue;
+    try {
+      issue = await getIssue(ref, opts.issue);
+    } catch (e) {
+      const msg = e instanceof GitHubError ? `GitHub ${e.status}` : String(e);
+      return { task: null, scored: [], defects: [], reason: `issue #${opts.issue} not accessible (${msg})` };
+    }
+    if (issue.pull_request) {
+      return { task: null, scored: [], defects: [], reason: `#${opts.issue} is a pull request, not an issue` };
+    }
+    if (issue.state && issue.state !== "open") {
+      return { task: null, scored: [], defects: [], reason: `issue #${opts.issue} is ${issue.state}` };
+    }
     const comments = await issueComments(ref, opts.issue).catch(() => []);
     const scored = scoreIssue(issue, { comments, depBotPresent: depBot });
     if (scored.rejected) {

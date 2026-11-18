@@ -1,4 +1,4 @@
-import { existsSync, readdirSync, readFileSync, statSync } from "node:fs";
+import { existsSync, lstatSync, readdirSync, readFileSync, statSync } from "node:fs";
 import { basename, extname, join } from "node:path";
 import { parse as parseYaml } from "yaml";
 import { recentSubjects } from "./clone.js";
@@ -63,23 +63,48 @@ function walk(dir: string, depth: number, acc: string[] = []): string[] {
     const p = join(dir, name);
     let st;
     try {
-      st = statSync(p);
+      st = lstatSync(p);
     } catch {
       continue;
     }
+    if (st.isSymbolicLink()) continue;
     if (st.isDirectory()) walk(p, depth + 1, acc);
-    else acc.push(p);
+    else if (st.isFile()) acc.push(p);
   }
   return acc;
 }
 
+function isFile(p: string): boolean {
+  try {
+    return statSync(p).isFile();
+  } catch {
+    return false;
+  }
+}
+
+function isDir(p: string): boolean {
+  try {
+    return statSync(p).isDirectory();
+  } catch {
+    return false;
+  }
+}
+
+function readJson(p: string): Record<string, unknown> | null {
+  try {
+    return JSON.parse(readFileSync(p, "utf8").replace(/^\uFEFF/, "")) as Record<string, unknown>;
+  } catch {
+    return null;
+  }
+}
+
 function findFirst(root: string, candidates: string[]): string | null {
   for (const c of candidates) {
-    if (existsSync(join(root, c))) return c;
+    if (isFile(join(root, c))) return c;
     const dir = join(root, c.split("/").slice(0, -1).join("/"));
     const base = c.split("/").at(-1)!.toLowerCase();
     try {
-      const hit = readdirSync(dir).find((f) => f.toLowerCase() === base);
+      const hit = readdirSync(dir).find((f) => f.toLowerCase() === base && isFile(join(dir, f)));
       if (hit) return c.split("/").slice(0, -1).concat(hit).join("/");
     } catch {
       /* dir missing */
@@ -130,15 +155,21 @@ export async function analyzeRepo(root: string): Promise<RepoMap> {
     .sort((a, b) => b.pct - a.pct)
     .slice(0, 6);
 
-  const topLevel = readdirSync(root, { withFileTypes: true })
-    .filter((e) => !e.name.startsWith(".git") && !SKIP_DIRS.has(e.name))
-    .map((e) => e.name + (e.isDirectory() ? "/" : ""))
-    .slice(0, 30);
+  const topLevel = (() => {
+    try {
+      return readdirSync(root, { withFileTypes: true })
+        .filter((e) => !e.name.startsWith(".git") && !SKIP_DIRS.has(e.name))
+        .map((e) => e.name + (e.isDirectory() ? "/" : ""))
+        .slice(0, 30);
+    } catch {
+      return [] as string[];
+    }
+  })();
 
   const entryPoints: string[] = [];
   const pkgPath = join(root, "package.json");
-  if (existsSync(pkgPath)) {
-    const pkg = JSON.parse(readFileSync(pkgPath, "utf8")) as Record<string, unknown>;
+  const pkg = isFile(pkgPath) ? readJson(pkgPath) : null;
+  if (pkg) {
     for (const k of ["main", "module", "bin", "exports"]) {
       if (pkg[k]) entryPoints.push(`package.json:${k} → ${JSON.stringify(pkg[k])}`);
     }
@@ -159,29 +190,32 @@ export async function analyzeRepo(root: string): Promise<RepoMap> {
     .slice(0, 10);
   let testRunner: string | null = null;
   let testCommand: string | null = null;
-  if (existsSync(pkgPath)) {
-    const pkg = JSON.parse(readFileSync(pkgPath, "utf8")) as { scripts?: Record<string, string>; devDependencies?: Record<string, string>; dependencies?: Record<string, string> };
-    const deps = { ...pkg.dependencies, ...pkg.devDependencies };
+  if (pkg) {
+    const deps = { ...(pkg.dependencies as object), ...(pkg.devDependencies as object) } as Record<string, string>;
+    const depMatch = (r: string) =>
+      deps[r] !== undefined ||
+      Object.keys(deps).some((d) => d.startsWith(`${r}-`) || d.endsWith(`/${r}`) || d.startsWith(`@${r}/`));
     for (const r of ["vitest", "jest", "mocha", "ava", "tap", "node:test"]) {
-      if (deps[r] || Object.keys(deps).some((d) => d.includes(r))) {
+      if (depMatch(r)) {
         testRunner = r;
         break;
       }
     }
-    if (pkg.scripts?.test) testCommand = `npm test (${pkg.scripts.test})`;
-    else if (pkg.scripts?.["test:unit"]) testCommand = `npm run test:unit (${pkg.scripts["test:unit"]})`;
+    const scripts = (pkg.scripts ?? {}) as Record<string, string>;
+    if (scripts.test) testCommand = `npm test (${scripts.test})`;
+    else if (scripts["test:unit"]) testCommand = `npm run test:unit (${scripts["test:unit"]})`;
   }
   if (!testRunner) {
-    if (existsSync(join(root, "pytest.ini")) || testFiles.some((f) => f === "pytest.ini") || existsSync(join(root, "pyproject.toml"))) {
+    if (isFile(join(root, "pytest.ini")) || testFiles.some((f) => f === "pytest.ini") || isFile(join(root, "pyproject.toml"))) {
       testRunner = "pytest";
       testCommand = "pytest";
-    } else if (existsSync(join(root, "go.mod"))) {
+    } else if (isFile(join(root, "go.mod"))) {
       testRunner = "go test";
       testCommand = "go test ./...";
-    } else if (existsSync(join(root, "Cargo.toml"))) {
+    } else if (isFile(join(root, "Cargo.toml"))) {
       testRunner = "cargo test";
       testCommand = "cargo test";
-    } else if (existsSync(join(root, "Makefile"))) {
+    } else if (isFile(join(root, "Makefile"))) {
       const mk = readFileSync(join(root, "Makefile"), "utf8");
       if (/^test:/m.test(mk)) {
         testRunner = "make test";
@@ -191,7 +225,7 @@ export async function analyzeRepo(root: string): Promise<RepoMap> {
   }
 
   const workflowsDir = join(root, ".github/workflows");
-  const ciChecks: CiCheck[] = existsSync(workflowsDir)
+  const ciChecks: CiCheck[] = isDir(workflowsDir)
     ? readdirSync(workflowsDir)
         .filter((f) => /\.ya?ml$/.test(f))
         .map((f) => parseCiFile(root, f))
@@ -217,7 +251,7 @@ export async function analyzeRepo(root: string): Promise<RepoMap> {
   const issueTemplates: string[] = [];
   for (const d of [".github/ISSUE_TEMPLATE", ".github/ISSUE_TEMPLATES"]) {
     const p = join(root, d);
-    if (existsSync(p)) {
+    if (isDir(p)) {
       for (const f of readdirSync(p)) issueTemplates.push(`${d}/${f}`);
     }
   }

@@ -35,7 +35,9 @@ export async function gatherSignals(ref: RepoRef): Promise<MaintainerSignals> {
   };
 
   try {
-    const closed = await listRecentClosedPrs(ref, 30);
+    const closed = (await listRecentClosedPrs(ref, 30)).filter(
+      (p) => !p.draft && !p.user.login.endsWith("[bot]") && p.author_association !== "BOT",
+    );
     out.sampledClosedPrs = closed.length;
     if (closed.length) {
       const merged = closed.filter((p) => p.merged_at).length;

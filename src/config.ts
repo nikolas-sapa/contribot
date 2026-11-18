@@ -48,7 +48,12 @@ export function loadConfig(base?: string): LoadedConfig {
   const relaxed: string[] = [];
   let unsafe = false;
   if (existsSync(path)) {
-    const raw = JSON.parse(readFileSync(path, "utf8")) as Partial<Limits> & { allowUnsafeLimits?: boolean };
+    let raw: Partial<Limits> & { allowUnsafeLimits?: boolean };
+    try {
+      raw = JSON.parse(readFileSync(path, "utf8")) as Partial<Limits> & { allowUnsafeLimits?: boolean };
+    } catch (e) {
+      throw new Error(`malformed config at ${path}: ${(e as Error).message}`);
+    }
     unsafe = raw.allowUnsafeLimits === true;
     for (const k of ["maxOpenPrsPerRepo", "maxPrsPerDay", "cooldownDays", "diffSizeCap", "issueAgeDays"] as const) {
       const v = raw[k];

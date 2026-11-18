@@ -7,9 +7,12 @@ export type AiPolicy = {
   evidence: string[];
 };
 
-const AI_TERM = /\b(ai|artificial intelligence|llm|large language model|chatgpt|openai|copilot|codex|claude|gemini|machine[- ]generated|ai[- ]generated|gpt[- ]?\w*)\b/i;
-const NEGATIVE = /\b(do not|don't|does not|not accept|no(?:t)?\b.{0,20}\b(?:ai|llm)|prohibit|ban(?:ned)?|forbidden|not allowed|refus|reject|disallow|against)/i;
-const POSITIVE = /\b(welcome|welcomed|allowed|permitted|encourage|okay|ok to use|fine with|acceptable|may use|disclos)/i;
+const AI_TERM = /\b(ai|artificial intelligence|llms?|large language models?|chatgpt|openai|copilot|codex|claude|gemini|machine[- ]generated|ai[- ]generated|gpt[- ]?\w*)\b/i;
+const NEGATIVE = /\b(do not|don't|does not|doesn't|not accept(?:ed)?|no(?:t)?\b.{0,20}\b(?:ai|llm)s?|prohibit|ban(?:ned|ning)?|forbidden|not allowed|refus|reject|disallow|cannot|can't|won't)\b/i;
+const NEGATED_POSITIVE = /\b(?:not|isn't|aren't|never|cannot|can't|won't|n't)\b[^.!?;]{0,40}\b(?:permitted|allowed|welcome[sd]?|acceptable|okay|ok|fine|encouraged?)\b/i;
+const DOUBLE_NEGATIVE = /\b(?:not|no|never|n't)\b[^.!?;]{0,25}\b(?:against|prohibit\w*|ban\w*|restrict\w*|forbid\w*|disallow\w*)\b/i;
+const POSITIVE = /\b(welcome|welcomed|allowed|permitted|encourage|okay|ok to use|fine with|acceptable|may use|disclos)\b/i;
+const NULL_CONTEXT = /\bno\b[^.!?;]{0,25}\b(?:policy|restrictions?|rules?|issues?|problems?|objections?)\b/i;
 
 export function detectAiPolicyText(files: { path: string; text: string }[]): AiPolicy {
   const evidence: string[] = [];
@@ -19,11 +22,10 @@ export function detectAiPolicyText(files: { path: string; text: string }[]): AiP
     for (const line of text.split("\n")) {
       if (!AI_TERM.test(line)) continue;
       const t = line.trim();
-      if (t.length > 400) continue;
-      const isNeg = NEGATIVE.test(t);
-      const isPos = POSITIVE.test(t);
+      let isNeg = (NEGATIVE.test(t) || NEGATED_POSITIVE.test(t)) && !DOUBLE_NEGATIVE.test(t) && !NULL_CONTEXT.test(t);
+      const isPos = POSITIVE.test(t) && !isNeg && !NEGATED_POSITIVE.test(t);
       if (isNeg) neg++;
-      if (isPos && !isNeg) pos++;
+      if (isPos) pos++;
       evidence.push(`${rel}: ${t.slice(0, 200)}`);
     }
   }
@@ -43,6 +45,8 @@ export function detectAiPolicy(root: string, map: RepoMap): AiPolicy {
     map.files.codeOfConduct,
     "README.md",
     "readme.md",
+    "Readme.md",
+    "README.txt",
     "README",
     map.files.prTemplate?.endsWith("/") ? null : map.files.prTemplate,
   ].filter((f): f is string => Boolean(f));

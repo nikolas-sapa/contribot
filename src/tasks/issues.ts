@@ -3,7 +3,8 @@ import type { TaskCandidate } from "../checks/types.js";
 
 const GOOD_LABELS = ["good first issue", "help wanted", "good-first-issue"];
 const MID_LABELS = ["bug", "docs", "documentation", "tests", "test", "help"];
-const DEP_RE = /\b(bump|update|upgrade|migrate)\b.{0,30}\b(dependenc|dep\b|deps\b|package|npm|version|from \d|to \d)/i;
+const DEP_RE = /\b(?:bump|upgrade?)\b[^.]{0,60}\b(?:from|to)\s+v?\d+/i;
+const DEP_RE2 = /\b(?:update|bump|upgrade|pin|migrate)\b[^.]{0,40}\b(?:dependenc\w*|deps?\b|package\.json|npm packages?|lockfile)\b/i;
 const MAINTAINER = ["MEMBER", "OWNER", "COLLABORATOR"];
 
 export function isMaintainerFiled(issue: GhIssue): boolean {
@@ -23,14 +24,14 @@ export type ScoredIssue = {
 export function isDependencyBump(issue: GhIssue): boolean {
   const labels = issue.labels.map((l) => l.name.toLowerCase());
   if (labels.includes("dependencies") || labels.includes("dependency")) return true;
-  return DEP_RE.test(issue.title) || (issue.body ? DEP_RE.test(issue.body.slice(0, 500)) : false);
+  return DEP_RE.test(issue.title) || DEP_RE2.test(issue.title);
 }
 
 export function maintainerRequestedHelp(comments: GhComment[]): boolean {
   return comments.some(
     (c) =>
       ["MEMBER", "OWNER", "COLLABORATOR"].includes(c.author_association) &&
-      /\b(pr welcome|pull request welcome|want to (fix|work|take)|feel free to (fix|submit|open)|contributions? welcome|help welcome|up for grabs|happy to (review|accept)|would (accept|take|review) a (pr|fix|patch))\b/i.test(
+      /\b(prs? welcome|pull requests? welcome|patch(?:es)? welcome|want to (fix|work|take)|feel free to (fix|submit|open)|contributions? welcome|help welcome[sd]?|up for grabs|happy to (review|accept)|would (accept|take|review) a (pr|fix|patch))\b/i.test(
         c.body,
       ),
   );

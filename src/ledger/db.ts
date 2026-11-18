@@ -76,6 +76,18 @@ export class Ledger {
     return r.c;
   }
 
+  unresolvedOpenedRefs(repo: string): string[] {
+    const opened = this.db
+      .prepare("SELECT ref FROM events WHERE kind = 'pr_opened' AND repo = ?")
+      .all(repo) as { ref: string }[];
+    const resolved = new Set(
+      (this.db
+        .prepare("SELECT ref FROM events WHERE kind = 'pr_outcome' AND repo = ?")
+        .all(repo) as { ref: string }[]).map((r) => r.ref),
+    );
+    return opened.map((o) => o.ref).filter((r) => !resolved.has(r));
+  }
+
   lastOutcome(repo: string, kinds: string[] = ["closed", "rejected"]): LedgerEvent | null {
     const rows = this.db
       .prepare("SELECT * FROM events WHERE kind = 'pr_outcome' AND repo = ? ORDER BY id DESC LIMIT 50")

@@ -22,7 +22,10 @@ export async function depBotPresentLocal(root: string): Promise<boolean> {
 }
 
 export async function depBotPresentApi(ref: RepoRef): Promise<boolean> {
-  for (const p of [".github/dependabot.yml", ".github/dependabot.yaml", "renovate.json", ".renovaterc.json"]) {
+  for (const p of [
+    ".github/dependabot.yml", ".github/dependabot.yaml",
+    "renovate.json", ".github/renovate.json", ".renovaterc", ".renovaterc.json",
+  ]) {
     if (await fileExistsOnGitHub(ref, p)) return true;
   }
   return false;

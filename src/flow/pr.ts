@@ -1,4 +1,4 @@
-import { ghJson, ghUser } from "../github.js";
+import { ghJson } from "../github.js";
 import { DISCLOSURE_LINE } from "../checks/types.js";
 import type { RepoRef } from "../types.js";
 import type { TaskCandidate } from "../checks/types.js";
@@ -32,15 +32,14 @@ export function buildPrBody(task: TaskCandidate | null, summary: string, ci: CiR
 
 export async function openDraftPr(
   ref: RepoRef,
-  opts: { head: string; branch: string; title: string; body: string },
+  opts: { base: string; branch: string; title: string; body: string; login: string },
 ): Promise<{ url: string; number: number }> {
-  const login = await ghUser();
   const res = (await ghJson(`/repos/${ref.full}/pulls`, {
     method: "POST",
     body: JSON.stringify({
       title: opts.title,
-      head: `${login}:${opts.branch}`,
-      base: opts.head,
+      head: `${opts.login}:${opts.branch}`,
+      base: opts.base,
       body: opts.body,
       draft: true,
       maintainer_can_modify: true,
