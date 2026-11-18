@@ -99,9 +99,10 @@ ledger: the accountability trail is a feature.
 ## Meaningful improvements only
 
 `plan`/`pr` must justify the change. **Accepted:** issues labeled
-good-first / help-wanted / bug / docs / tests · issues with a maintainer
-comment requesting a fix · a detected defect with evidence (e.g. a dead doc
-link). **Rejected outright:** cosmetic refactors, "improvements" with no
+good-first / help-wanted / bug / docs / tests · **issues filed by a
+maintainer** (highest merge-odds signal — they wrote it because they want it
+fixed) · issues with a maintainer comment requesting a fix · a detected defect
+with evidence (e.g. a dead doc link). **Rejected outright:** cosmetic refactors, "improvements" with no
 issue/defect, dependency bumps a bot already owns (dependabot/renovate detected
 → skipped), reformatting, comment churn, README badges.
 

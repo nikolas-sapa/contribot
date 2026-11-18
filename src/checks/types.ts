@@ -19,6 +19,7 @@ export type TaskCandidate = {
   issue?: GhIssue;
   defectEvidence?: string;
   maintainerRequested?: boolean;
+  maintainerFiled?: boolean;
 };
 
 export type CheckContext = {

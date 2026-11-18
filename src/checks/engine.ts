@@ -101,6 +101,9 @@ export const RULES: Rule[] = [
     if (labels.some((l) => legit.includes(l))) {
       return ok(name, `issue #${issue.number} labeled ${labels.filter((l) => legit.includes(l)).join(", ")}`);
     }
+    if (ctx.task.maintainerFiled) {
+      return ok(name, `issue #${issue.number} was filed by a maintainer`);
+    }
     if (ctx.task.maintainerRequested) {
       return ok(name, `issue #${issue.number} has a maintainer comment requesting help`);
     }

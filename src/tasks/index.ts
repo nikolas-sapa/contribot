@@ -64,6 +64,6 @@ export function evaluateIssueList(issues: GhIssue[], depBotPresent: boolean): Sc
 }
 
 export { depBotPresentApi, findDeadDocLinks } from "./defects.js";
-export { isDependencyBump, maintainerRequestedHelp, scoreIssue, pickIssue } from "./issues.js";
+export { isDependencyBump, isMaintainerFiled, maintainerRequestedHelp, scoreIssue, pickIssue } from "./issues.js";
 export type { ScoredIssue } from "./issues.js";
 export type { Defect } from "./defects.js";

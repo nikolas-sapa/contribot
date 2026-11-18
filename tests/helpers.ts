@@ -36,7 +36,7 @@ export function ctx(overrides: Partial<CheckContext> = {}, ledger?: Ledger): Che
   };
 }
 
-export function makeIssue(n: number, opts: { labels?: string[]; title?: string; body?: string; createdAt?: string } = {}): GhIssue {
+export function makeIssue(n: number, opts: { labels?: string[]; title?: string; body?: string; createdAt?: string; authorAssociation?: string } = {}): GhIssue {
   return {
     number: n,
     title: opts.title ?? `issue ${n}`,
@@ -45,6 +45,7 @@ export function makeIssue(n: number, opts: { labels?: string[]; title?: string; 
     created_at: opts.createdAt ?? new Date().toISOString(),
     labels: (opts.labels ?? []).map((name) => ({ name })),
     user: { login: "reporter" },
+    author_association: opts.authorAssociation,
   };
 }
 

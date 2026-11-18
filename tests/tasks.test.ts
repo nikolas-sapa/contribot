@@ -26,6 +26,15 @@ describe("T-C6: no qualifying issues → no task", () => {
     expect(pickIssue(scored)).toBeNull();
   });
 
+  it("maintainer-filed issue qualifies on its own (they want it fixed)", () => {
+    const maint = makeIssue(7, { title: "we need this", authorAssociation: "MEMBER" });
+    const outsider = makeIssue(8, { title: "please add x", authorAssociation: "NONE" });
+    const scored = evaluateIssueList([outsider, maint], false);
+    const best = pickIssue(scored);
+    expect(best?.issue.number).toBe(7);
+    expect(best?.maintainerFiled).toBe(true);
+  });
+
   it("picks the maintainer-requested issue first", () => {
     const stale = makeIssue(5, {
       title: "old bug",

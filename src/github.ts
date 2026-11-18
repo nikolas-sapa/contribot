@@ -72,6 +72,7 @@ export type GhIssue = {
   pull_request?: unknown;
   labels: { name: string }[];
   user: { login: string } | null;
+  author_association?: string;
 };
 
 export type GhComment = {

@@ -4,12 +4,18 @@ import type { TaskCandidate } from "../checks/types.js";
 const GOOD_LABELS = ["good first issue", "help wanted", "good-first-issue"];
 const MID_LABELS = ["bug", "docs", "documentation", "tests", "test", "help"];
 const DEP_RE = /\b(bump|update|upgrade|migrate)\b.{0,30}\b(dependenc|dep\b|deps\b|package|npm|version|from \d|to \d)/i;
+const MAINTAINER = ["MEMBER", "OWNER", "COLLABORATOR"];
+
+export function isMaintainerFiled(issue: GhIssue): boolean {
+  return MAINTAINER.includes(issue.author_association ?? "");
+}
 
 export type ScoredIssue = {
   issue: GhIssue;
   score: number;
   reasons: string[];
   maintainerRequested: boolean;
+  maintainerFiled: boolean;
   dependencyLike: boolean;
   rejected?: string;
 };
@@ -38,6 +44,7 @@ export function scoreIssue(
   const reasons: string[] = [];
   let score = 0;
   const mr = opts.comments ? maintainerRequestedHelp(opts.comments) : false;
+  const mf = isMaintainerFiled(issue);
   const depLike = isDependencyBump(issue);
 
   if (depLike && opts.depBotPresent) {
@@ -46,6 +53,7 @@ export function scoreIssue(
       score: -Infinity,
       reasons: [],
       maintainerRequested: mr,
+      maintainerFiled: mf,
       dependencyLike: true,
       rejected: "dependency-only issue and repo already has dependabot/renovate — a bot owns this",
     };
@@ -53,6 +61,10 @@ export function scoreIssue(
   if (depLike) {
     score -= 50;
     reasons.push("looks like a dependency bump");
+  }
+  if (mf) {
+    score += 60;
+    reasons.push("filed by a maintainer — they want it fixed");
   }
   if (labels.some((l) => GOOD_LABELS.includes(l))) {
     score += 100;
@@ -71,7 +83,7 @@ export function scoreIssue(
     score += 10;
     reasons.push(`open ${Math.floor(ageDays)}d`);
   }
-  return { issue, score, reasons, maintainerRequested: mr, dependencyLike: depLike };
+  return { issue, score, reasons, maintainerRequested: mr, maintainerFiled: mf, dependencyLike: depLike };
 }
 
 export function pickIssue(scored: ScoredIssue[]): ScoredIssue | null {
@@ -81,5 +93,10 @@ export function pickIssue(scored: ScoredIssue[]): ScoredIssue | null {
 }
 
 export function scoredToTask(s: ScoredIssue): TaskCandidate {
-  return { kind: "issue", issue: s.issue, maintainerRequested: s.maintainerRequested };
+  return {
+    kind: "issue",
+    issue: s.issue,
+    maintainerRequested: s.maintainerRequested,
+    maintainerFiled: s.maintainerFiled,
+  };
 }
