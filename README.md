@@ -40,7 +40,7 @@ contribot discover [--lang ts]    # search repos ranked by value × merge-odds, 
 contribot scout <repo>            # read-only: full AGENT-BRIEF.md to stdout (or --out file)
 contribot plan <repo> --issue 42  # pick a contribution, produce a plan (no writes to GitHub)
 contribot pr <repo> --issue 42    # brief → checks → fork → branch → patch → repo CI → draft PR
-contribot ledger                  # all activity: PRs opened/merged/rejected, per-repo
+contribot ledger [--no-sync]      # all activity: PRs opened/merged/rejected, per-repo (syncs outcomes)
 contribot limits                  # show current etiquette limits + config
 ```
 
@@ -124,9 +124,11 @@ verification / AI disclosure).
 ## Ledger
 
 Every action lands in `~/.contribot/ledger.db`: scouts, plans, PRs opened,
-outcomes, cooldowns, refusals, overrides. `contribot ledger` shows history and
-per-repo reputation ("2 merged, 1 rejected"). Rejection rate >50% → the tool
-warns you that you're generating slop.
+outcomes, cooldowns, refusals, overrides. `contribot ledger` first syncs the
+outcome of every still-open PR from GitHub (skip with `--no-sync`), then shows
+history and per-repo reputation ("2 merged, 1 closed"). Closed-unmerged PRs
+count as rejections: rejection rate >50% (min 3 resolved) → the tool warns you
+that you're generating slop.
 
 ## Library
 

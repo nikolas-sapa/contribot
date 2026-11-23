@@ -8,6 +8,7 @@ import { runChecks, type CheckContext, type TaskCandidate } from "./checks/index
 import { contribotDir, loadConfig, type LoadedConfig } from "./config.js";
 import { ghJson, ghUser, openPrsByUser } from "./github.js";
 import { Ledger, ledgerPath } from "./ledger/db.js";
+import { reconcileAll, reconcileRepo } from "./ledger/reconcile.js";
 import { pickTask, type PickResult } from "./tasks/index.js";
 import { ensureFork } from "./flow/fork.js";
 import { runRepoChecks, type CiRun } from "./flow/ci.js";
@@ -22,6 +23,7 @@ export function createAgent(opts: { baseDir?: string } = {}): {
   scout: (repo: string, o?: { out?: string; skipSignals?: boolean }) => Promise<{ brief: Brief; markdown: string }>;
   plan: (repo: string, o?: { issue?: number }) => Promise<PlanResult>;
   pr: (repo: string, o?: PrOptions) => Promise<PrResult>;
+  sync: () => Promise<number>;
   close: () => void;
 } {
   const baseDir = opts.baseDir ?? contribotDir(process.env.CONTRIBOT_HOME);
@@ -40,21 +42,11 @@ export function createAgent(opts: { baseDir?: string } = {}): {
   }
 
   async function reconcileLedger(ref: RepoRef): Promise<void> {
-    for (const prRef of ledger.unresolvedOpenedRefs(ref.full)) {
-      const n = parseInt(prRef.replace(/\D/g, ""), 10);
-      if (!Number.isFinite(n)) continue;
-      try {
-        const pr = (await ghJson(`/repos/${ref.full}/pulls/${n}`)) as {
-          state: string;
-          merged_at: string | null;
-        };
-        if (pr.state === "closed") {
-          ledger.record("pr_outcome", ref.full, prRef, { outcome: pr.merged_at ? "merged" : "closed" });
-        }
-      } catch {
-        /* unreachable API — leave unresolved */
-      }
-    }
+    await reconcileRepo(ledger, ref.full);
+  }
+
+  async function sync(): Promise<number> {
+    return reconcileAll(ledger);
   }
 
   function logUnsafe(ref: RepoRef, phase: string): void {
@@ -176,7 +168,7 @@ export function createAgent(opts: { baseDir?: string } = {}): {
     }
   }
 
-  return { cfg, ledger, scout, plan, pr, close: () => ledger.close() };
+  return { cfg, ledger, scout, plan, pr, sync, close: () => ledger.close() };
 }
 
 const AI_POLICY_CANDIDATES = [

@@ -88,6 +88,13 @@ export class Ledger {
     return opened.map((o) => o.ref).filter((r) => !resolved.has(r));
   }
 
+  reposWithUnresolvedPrs(): string[] {
+    const repos = this.db
+      .prepare("SELECT DISTINCT repo FROM events WHERE kind = 'pr_opened' AND repo IS NOT NULL")
+      .all() as { repo: string }[];
+    return repos.map((r) => r.repo).filter((repo) => this.unresolvedOpenedRefs(repo).length > 0);
+  }
+
   lastOutcome(repo: string, kinds: string[] = ["closed", "rejected"]): LedgerEvent | null {
     const rows = this.db
       .prepare("SELECT * FROM events WHERE kind = 'pr_outcome' AND repo = ? ORDER BY id DESC LIMIT 50")
@@ -127,6 +134,12 @@ export class Ledger {
   close(): void {
     this.db.close();
   }
+}
+
+// Reconciliation records a closed-unmerged PR as "closed", so it counts as a rejection here.
+export function isSlop(s: { merged: number; closed: number; rejected: number; stale: number }): boolean {
+  const resolved = s.merged + s.closed + s.rejected + s.stale;
+  return resolved >= 3 && (s.rejected + s.closed) / resolved > 0.5;
 }
 
 export function ledgerPath(base: string): string {
