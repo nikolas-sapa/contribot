@@ -2,6 +2,7 @@
 import { Command } from "commander";
 import { createAgent, type PrResult } from "../agent.js";
 import { DEFAULT_LIMITS } from "../config.js";
+import { isSlop } from "../ledger/db.js";
 import type { CheckResult } from "../checks/index.js";
 
 const program = new Command();
@@ -167,22 +168,26 @@ program
 program
   .command("ledger")
   .option("--repo <full>", "filter to one repo")
-  .action((opts: { repo?: string }) => {
+  .option("--no-sync", "skip fetching outcomes of still-open PRs from GitHub")
+  .action(async (opts: { repo?: string; sync?: boolean }) => {
     const agent = createAgent();
     try {
       const ledger = agent.ledger;
+      if (opts.sync !== false) {
+        const resolved = await agent.sync();
+        if (resolved) console.log(`synced ${resolved} PR outcome(s) from GitHub\n`);
+      }
       const stats = ledger.perRepoStats().filter((s) => !opts.repo || s.repo === opts.repo);
       if (stats.length) {
         console.log("per-repo reputation:");
         for (const s of stats) {
-          const resolved = s.merged + s.closed + s.rejected + s.stale;
           const parts = [`${s.opened} opened`];
           if (s.merged) parts.push(`${s.merged} merged`);
           if (s.rejected) parts.push(`${s.rejected} rejected`);
           if (s.closed) parts.push(`${s.closed} closed`);
           if (s.stale) parts.push(`${s.stale} stale`);
           console.log(`  ${s.repo}: ${parts.join(", ")}`);
-          if (resolved >= 3 && s.rejected / resolved > 0.5) {
+          if (isSlop(s)) {
             console.log(`    ⚠ rejection rate >50% on ${s.repo} — you are generating slop. Stop.`);
           }
         }
